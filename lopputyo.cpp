@@ -6,24 +6,29 @@
 #include <regex> //Regex tarkistus
 #include <algorithm>
 #include <random>
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 
+//Luokka huoneille
 class room {
 	public :
 		int room;
 		int size;
 };
 
+//Luokka varauksille
 class reservation {
 	public:
 		int room;
 		string name;
+		string phoneNumber;
 		int resNumber;
 		int days;
 };
 
-//Funktio luvun etsimiselle vektorista
+//Funktio huoneen saatavilla olemisen tarkistamiseksi
 int roomAvailable(vector<reservation> reservations, reservation reservation) {
 	if (reservations.size() != 0) {
 		for (int i = 0; i < reservations.size(); ++i)
@@ -45,13 +50,14 @@ int roomAvailable(vector<reservation> reservations, reservation reservation) {
 
 //Luo motellin huoneet v‰lilt‰ 40-300 ja pit‰‰ huolen, ett‰ luku on parillinen
 vector<room> configRooms() {
+	vector<room> tempRoomList;
 	random_device rd;
 	mt19937 gen(rd());
 	uniform_int_distribution<> dist(40, 300);
-	int tempRooms = 0;
-	vector<room> tempRoomList;
+	int tempRooms = 100;
 	roomCount:
-	tempRooms = dist(gen);
+	//Mahdollisuus arpoa huoneiden m‰‰r‰
+	//tempRooms = dist(gen);
 	if (tempRooms % 2 == 1)
 		goto roomCount;
 	for (int i = 0; i < tempRooms; ++i) {
@@ -66,44 +72,74 @@ vector<room> configRooms() {
 
 //Varaa osa huoneista valmiiksi
 vector<reservation> configReservations(int roomCount) {
-	random_device rd;   // non-deterministic generator
-	mt19937 gen(rd());  // to seed mersenne twister.
-	double toReserve = roomCount * 0.1;
 	vector<reservation> tempReservations;
 
-	for (int i = 0; i < toReserve; ++i) {
-		reservation tempReserved = { 0,"Jack Daniels",0,0 };
-		uniform_int_distribution<> dist(1, roomCount);
-		tempReserved.room = dist(gen);
-		uniform_int_distribution<> dista(10000, 99999);
-		tempReserved.resNumber = dista(gen);
-		uniform_int_distribution<> distb(1, 10);
-		tempReserved.days = distb(gen);
-		if (tempReservations.size() != 0) {
-		check:
-			int roomFound = roomAvailable(tempReservations, tempReserved);
-			if (roomFound == 1)
-			{
-				uniform_int_distribution<> distc(1, roomCount);
-				tempReserved.room = distc(gen);
-				goto check;
-			}
-			else if (roomFound == 2)
-			{
-				uniform_int_distribution<> distd(10000, 99999);
-				tempReserved.resNumber = distd(gen);
-				goto check;
+	ifstream database("./varaukset.txt");
+	if (database.good())
+	{
+		string data;
+		while (getline(database, data))
+		{
+			istringstream stream(data);
+			string tempRoom, tempName, tempPhone, tempResNum, tempDays;
+			getline(stream, tempRoom, ',');
+			getline(stream, tempName, ',');
+			getline(stream, tempPhone, ',');
+			getline(stream, tempResNum, ',');
+			getline(stream, tempDays, ',');
+
+			reservation tempRes = { stoi(tempRoom),tempName,tempPhone,stoi(tempResNum),stoi(tempDays) };
+
+			tempReservations.push_back(tempRes);
+		}
+		database.close();
+	}
+	else {
+		ofstream newDatabase("./varaukset.txt");
+		random_device rd;
+		mt19937 gen(rd());
+		double toReserve = roomCount * 0.1;
+		for (int i = 0; i < toReserve; ++i) {
+			reservation tempReserved = { 0,"Jack Daniels","+358441234567",0,0 };
+			uniform_int_distribution<> dist(1, roomCount);
+			tempReserved.room = dist(gen);
+			uniform_int_distribution<> dista(10000, 99999);
+			tempReserved.resNumber = dista(gen);
+			uniform_int_distribution<> distb(1, 10);
+			tempReserved.days = distb(gen);
+			if (tempReservations.size() != 0) {
+			check:
+				int roomFound = roomAvailable(tempReservations, tempReserved);
+				if (roomFound == 1)
+				{
+					uniform_int_distribution<> distc(1, roomCount);
+					tempReserved.room = distc(gen);
+					goto check;
+				}
+				else if (roomFound == 2)
+				{
+					uniform_int_distribution<> distd(10000, 99999);
+					tempReserved.resNumber = distd(gen);
+					goto check;
+				}
+				else
+				{
+					tempReservations.push_back(tempReserved);
+					newDatabase << tempReserved.room << "," << tempReserved.name << "," << tempReserved.phoneNumber << "," << tempReserved.resNumber << "," << tempReserved.days << "\n";
+				}
 			}
 			else
+			{
 				tempReservations.push_back(tempReserved);
+				newDatabase << tempReserved.room << "," << tempReserved.name << "," << tempReserved.phoneNumber << "," << tempReserved.resNumber << "," << tempReserved.days << "\n";
+			}
 		}
-		else
-			tempReservations.push_back(tempReserved);
+		newDatabase.close();
 	}
 	return tempReservations;
 }
 
-//Antaa varattujen huoneiden m‰‰r‰n koon perusteella
+//Antaa varattujen huoneiden m‰‰r‰n huone koon perusteella
 int reservedRooms(vector<reservation> reservations, int rooms, bool oneBed) {
 	int tempReservedRooms = 0;
 	for (int i = 0; i < reservations.size(); ++i)
@@ -147,6 +183,7 @@ bool askToBookOrSearch()
 		return false;
 }
 
+//Kysyy k‰ytt‰j‰lt‰ etsiikˆ h‰n varausta nimen vai varausnumeron perusteella ja palauttaa sen mukaan joko true/false
 bool askNameOrNum()
 {
 	char answer;
@@ -243,6 +280,26 @@ int askDays() {
 	return tempDays;
 }
 
+//Kysyy k‰ytt‰j‰lt‰ puhelinnumeron
+string askPhoneNumber() {
+	string tempNumber;
+	cin.ignore();
+	while (true)
+	{
+		cout << "What is your phone number?\n";
+		getline(cin, tempNumber);
+		
+		tempNumber.erase(remove(tempNumber.begin(), tempNumber.end(), ' '), tempNumber.end()); //Poistaa v‰lit puhelinnumerosta
+	
+		//Tarkastaa onko puhelinnumero oikeassa muodossa
+		if (regex_match(tempNumber, regex("^[+]?[0-9]{10,12}$")))
+			break;
+
+		cout << "Phone numbers are in the format +XXX XX XXXXXXX or XXX XXXXXXX.\n";
+	}
+	return tempNumber;
+}
+
 //Kysyy k‰ytt‰j‰lt‰ nimen ja hylk‰‰ sen jos ei k‰yt‰ sallittuja merkkej‰
 string askName()
 {
@@ -259,7 +316,7 @@ string askName()
 	return tempName;
 }
 
-//Funktio huoneen numeron luomiselle (Koodi n‰ytt‰‰ t‰n takia siistimm‰lt‰)
+//Arpoo k‰ytt‰j‰lle huoneen huone koon perusteella
 int tempRoomNum(int size, int rooms) {
 	random_device rd;
 	mt19937 gen(rd());
@@ -277,6 +334,7 @@ int tempRoomNum(int size, int rooms) {
 	return tempRoom;
 }
 
+//Etsii varauksen nimen perusteella
 void searchByName(vector<reservation> reservations)
 {
 	int tempFound = 0;
@@ -301,6 +359,7 @@ void searchByName(vector<reservation> reservations)
 			if (tempFound == 0)
 				cout << "\n--- Here are your reservations ---\n";
 			cout << "\nReservation name: " << reservations[i].name;
+			cout << "\nPhone number: " << reservations[i].phoneNumber;
 			cout << "\nReservation number: " << reservations[i].resNumber;
 			cout << "\nRoom number: " << reservations[i].room;
 			cout << "\nReservation length: " << reservations[i].days << endl;
@@ -313,6 +372,7 @@ void searchByName(vector<reservation> reservations)
 	}
 }
 
+//Kysyy varausnumeron
 int askResNumber() {
 	int tempResNum = 0;
 	while (true)
@@ -331,6 +391,7 @@ int askResNumber() {
 	return tempResNum;
 }
 
+//Etsii varauksen numeron perusteella
 void searchByNumber(vector<reservation> reservations)
 {
 	int tempFound = 0;
@@ -342,6 +403,7 @@ void searchByNumber(vector<reservation> reservations)
 			if (tempFound == 0)
 				cout << "\n--- Here is your reservation ---\n";
 			cout << "\nReservation name: " << reservations[i].name;
+			cout << "\nPhone number: " << reservations[i].phoneNumber;
 			cout << "\nReservation number: " << reservations[i].resNumber;
 			cout << "\nRoom number: " << reservations[i].room;
 			cout << "\nReservation length: " << reservations[i].days << endl;
@@ -355,7 +417,7 @@ void searchByNumber(vector<reservation> reservations)
 }
 
 //Tee uusi huonevaraus ja lis‰‰ se huonevaraus vectoriin
-vector<reservation> newReservation(int size, string name, int days, vector<reservation> reservations, int rooms) {
+vector<reservation> newReservation(int size, string name, string phoneNumber, int days, vector<reservation> reservations, int rooms) {
 	//Random k‰yttˆˆn
 	random_device rd;
 	mt19937 gen(rd());
@@ -368,7 +430,7 @@ vector<reservation> newReservation(int size, string name, int days, vector<reser
 	int tempRoom = tempRoomNum(size, rooms);
 
 	//Temp muuttuja varaukselle
-	reservation tempRes = { tempRoom,name,tempResNumber,days };
+	reservation tempRes = { tempRoom,name,phoneNumber,tempResNumber,days };
 
 	//Tarkistus, ett‰ huone tai varausnumero ei ole jo varattu ja lis‰‰ vectoriin, jos ei ole
 	check2:
@@ -385,6 +447,11 @@ vector<reservation> newReservation(int size, string name, int days, vector<reser
 	}
 	else
 		reservations.push_back(tempRes);
+
+
+	ofstream updatedDatabase("./varaukset.txt", ios::app);
+	updatedDatabase << tempRes.room << "," << tempRes.name << "," << tempRes.phoneNumber << "," << tempRes.resNumber << "," << tempRes.days << "\n";
+	updatedDatabase.close();
 
 	cout << "Your reservation number is " <<  tempRes.resNumber << "\n\n";
 
@@ -420,10 +487,9 @@ int main() {
 	if (answer)
 	{
 		int roomSize = askSize(oneBedAvailable, twoBedAvailable);
-
 		int days = askDays();
-
 		string name = askName();
+		string phoneNumber = askPhoneNumber();
 
 		double total;
 		int price;
@@ -442,7 +508,7 @@ int main() {
 
 		cout << "\nYour total for " << days << " days in a " << roomSize << " bed room comes to a total of " << total << "$\n";
 
-		reserved = newReservation(roomSize, name, days, reserved, int(rooms.size()));
+		reserved = newReservation(roomSize, name, phoneNumber, days, reserved, int(rooms.size()));
 
 		system("PAUSE");
 
